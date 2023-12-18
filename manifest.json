@@ -2,7 +2,7 @@
     "id": "obsidian-map-view-with-edges",
     "name": "Map View With Edges",
     "version": "1.0.0",
-    "minAppVersion": "0.0.0",
-    "description": "An interactive map view that also can draw edges between nodes. This code is based on a fork of obsidian-map-view v4.15.3.",
+    "minAppVersion": "0.15.3",
+    "description": "An interactive map view that also can draw edges between nodes. This code is based on a fork of obsidian-map-view v4.0.0",
     "isDesktopOnly": false
 }

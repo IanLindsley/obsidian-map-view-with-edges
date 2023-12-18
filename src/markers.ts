@@ -109,6 +109,12 @@ export class FileMarker extends BaseGeoLayer {
     getBounds(): leaflet.LatLng[] {
         return [this.location];
     }
+
+    hasProgrammaticMarker(): boolean {
+        return this.tags?.some(
+            (t) => t.toLowerCase() === '#programmatic-markers'
+        );
+    }
 }
 
 export function generateMarkerId(

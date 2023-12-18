@@ -19,6 +19,7 @@ import 'leaflet-geosearch/dist/geosearch.css';
 import 'leaflet.markercluster/dist/MarkerCluster.css';
 import 'leaflet.markercluster/dist/MarkerCluster.Default.css';
 import 'leaflet.markercluster';
+import * as regex from 'src/regex';
 
 import * as consts from 'src/consts';
 import { MapState, mergeStates, stateToUrl, getCodeBlock } from 'src/mapState';
@@ -75,11 +76,22 @@ export type ViewSettings = {
     skipAnimations?: boolean;
 };
 
+type Edge = {
+    v1: leaflet.LatLng;
+    v2: leaflet.LatLng;
+};
+
+type MarkerWithDegree = {
+    marker: FileMarker;
+    degree: number;
+};
+
 export class MapContainer {
     private app: App;
     public settings: PluginSettings;
     public viewSettings: ViewSettings;
     private parentEl: HTMLElement;
+    private edgeConfigFile: TFile;
     /** The displayed controls and objects of the map, separated from its logical state.
      * Must only be updated in updateMarkersToState */
     public state: MapState;
@@ -96,6 +108,7 @@ export class MapContainer {
         clusterGroup: leaflet.MarkerClusterGroup;
         /** The markers currently on the map */
         markers: MarkersMap = new Map();
+        polylines: leaflet.Polyline[] = [];
         controls: ViewControls;
         /** The zoom controls */
         zoomControls: leaflet.Control.Zoom;
@@ -159,6 +172,11 @@ export class MapContainer {
         // Create the default state by the configuration
         this.defaultState = this.settings.defaultState;
         this.parentEl = parentEl;
+
+        let files = this.app.vault.getMarkdownFiles();
+        this.edgeConfigFile = files.find(
+            (f) => f.basename?.toLowerCase() === 'edge_config'
+        );
 
         // Listen to file changes so we can update markers accordingly
         this.app.vault.on('delete', (file) =>
@@ -574,7 +592,9 @@ export class MapContainer {
         }
         finalizeMarkers(newMarkers, this.settings, this.plugin.iconCache);
         this.state = structuredClone(state);
-        this.updateMapMarkers(newMarkers);
+
+        let edges = await this.buildEdges(this.edgeConfigFile);
+        this.updateMapMarkers(newMarkers, edges);
         // There are multiple layers of safeguards here, in an attempt to minimize the cases where a series
         // of interactions and async updates compete over the map.
         // See the comment in internalSetViewState to get more context
@@ -600,6 +620,31 @@ export class MapContainer {
         if (this.settings.debug) console.timeEnd('updateMarkersToState');
     }
 
+    async buildEdges(edgeConfigFile: TFile): Promise<Map<string, Edge>> {
+        let edges: Map<string, Edge> = new Map();
+        if (edgeConfigFile) {
+            const content = await this.app.vault.read(edgeConfigFile);
+            const edgesRegex = regex.EDGES;
+            for (const m of content.matchAll(edgesRegex)) {
+                let edge: Edge = {
+                    v1: new leaflet.LatLng(
+                        parseFloat(m.groups.lat1),
+                        parseFloat(m.groups.lng1)
+                    ),
+                    v2: new leaflet.LatLng(
+                        parseFloat(m.groups.lat2),
+                        parseFloat(m.groups.lng2)
+                    ),
+                };
+                edges.set(
+                    `${edge.v1.toString()}<<->>${edge.v2.toString()}`,
+                    edge
+                );
+            }
+        }
+        return edges;
+    }
+
     filterMarkers(allMarkers: BaseGeoLayer[], queryString: string) {
         let results: BaseGeoLayer[] = [];
         const query = new Query(this.app, queryString);
@@ -613,7 +658,7 @@ export class MapContainer {
      * Unchanged markers are not touched, new markers are created and old markers that are not in the updated list are removed.
      * @param newMarkers The new array of FileMarkers
      */
-    updateMapMarkers(newMarkers: BaseGeoLayer[]) {
+    updateMapMarkers(newMarkers: BaseGeoLayer[], edges: Map<string, Edge>) {
         let newMarkersMap: MarkersMap = new Map();
         let markersToAdd: leaflet.Layer[] = [];
         let markersToRemove: leaflet.Layer[] = [];
@@ -647,12 +692,99 @@ export class MapContainer {
         this.display.clusterGroup.removeLayers(markersToRemove);
         this.display.clusterGroup.addLayers(markersToAdd);
         this.display.markers = newMarkersMap;
+
+        // build a map of vertices, indexed by latlng.
+        // we'll use this map for the culling
+        let vertices: Map<string, MarkerWithDegree> = new Map();
+        for (let m of this.display.markers.values()) {
+            if (m instanceof FileMarker) {
+                vertices.set(m.location.toString(), { marker: m, degree: 0 });
+            }
+        }
+
+        // clear previous polylines from the map
+        for (const p of this.display.polylines) {
+            p.remove();
+        }
+        this.display.polylines.length = 0;
+
+        // remove all edges which have lost one or more vertices
+        // but if the edge is still valid, increment the degree of its vertices
+        for (let [k, edge] of edges) {
+            let [v1, v2] = k.split('<<->>');
+            if (!vertices.has(v1) || !vertices.has(v2)) {
+                edges.delete(k);
+            } else {
+                // update degree counts
+                vertices.get(v1).degree++;
+                vertices.get(v2).degree++;
+            }
+        }
+
+        // update vertices sizes based on degree
+        for (let v of vertices.values()) {
+            if (v.marker.hasProgrammaticMarker() && v.marker.geoLayer) {
+                v.marker.geoLayer.setIcon(
+                    this.generateProgrammaticMarker(v.degree)
+                );
+            }
+        }
+
+        // now that all orphaned edges have been culled, add
+        // polylines to the map, being careful not to add dups
+        for (const edge of edges.values()) {
+            let polyline = leaflet.polyline([edge.v1, edge.v2], {
+                color: 'red',
+                weight: 1,
+            });
+            polyline.addTo(this.display.map);
+            this.display.polylines.push(polyline);
+        }
+    }
+
+    private generateProgrammaticMarker(degree: number = 0): leaflet.Icon {
+        let size = 16;
+        let anchor = 8;
+
+        // replace with a better algorithm later...
+        if (degree >= 2 && degree < 4) {
+            size = 20;
+            anchor = 10;
+        } else if (degree >= 4 && degree < 6) {
+            size = 24;
+            anchor = 12;
+        } else if (degree >= 6 && degree < 8) {
+            size = 28;
+            anchor = 14;
+        } else if (degree >= 8 && degree < 10) {
+            size = 32;
+            anchor = 16;
+        } else if (degree >= 10) {
+            size = 36;
+            anchor = 18;
+        }
+
+        return leaflet.icon({
+            iconUrl:
+                'data:image/svg+xml;base64,PCFET0NUWVBFIHN2ZyBQVUJMSUMgIi0vL1czQy8vRFREIFNWRyAxLjEvL0VOIiAiaHR0cDovL3d3dy53My5vcmcvR3JhcGhpY3MvU1ZHLzEuMS9EVEQvc3ZnMTEuZHRkIj4KDTwhLS0gVXBsb2FkZWQgdG86IFNWRyBSZXBvLCB3d3cuc3ZncmVwby5jb20sIFRyYW5zZm9ybWVkIGJ5OiBTVkcgUmVwbyBNaXhlciBUb29scyAtLT4KPHN2ZyB3aWR0aD0iODAwcHgiIGhlaWdodD0iODAwcHgiIHZpZXdCb3g9IjAgMCAxNiAxNiIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiBmaWxsPSIjMEU0RTlDIiBjbGFzcz0iYmkgYmktY2lyY2xlLWZpbGwiPgoNPGcgaWQ9IlNWR1JlcG9fYmdDYXJyaWVyIiBzdHJva2Utd2lkdGg9IjAiLz4KDTxnIGlkPSJTVkdSZXBvX3RyYWNlckNhcnJpZXIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPgoNPGcgaWQ9IlNWR1JlcG9faWNvbkNhcnJpZXIiPiA8Y2lyY2xlIGN4PSI4IiBjeT0iOCIgcj0iOCIvPiA8L2c+Cg08L3N2Zz4=',
+            iconSize: [size, size],
+            iconAnchor: [anchor, anchor],
+        });
     }
 
     private newLeafletMarker(marker: FileMarker): leaflet.Marker {
-        let newMarker = leaflet.marker(marker.location, {
-            icon: marker.icon || new leaflet.Icon.Default(),
-        });
+        let icon:
+            | leaflet.Icon<leaflet.ExtraMarkers.IconOptions>
+            | leaflet.DivIcon;
+        if (marker.hasProgrammaticMarker()) {
+            icon = this.generateProgrammaticMarker();
+        } else if (marker.icon) {
+            icon = marker.icon;
+        } else {
+            icon = new leaflet.Icon.Default();
+        }
+
+        let newMarker = leaflet.marker(marker.location, { icon: icon });
         newMarker.on('click', (event: leaflet.LeafletMouseEvent) => {
             if (utils.isMobile(this.app))
                 this.showMarkerPopups(marker, newMarker);
@@ -947,7 +1079,8 @@ export class MapContainer {
                 this.app
             );
         finalizeMarkers(newMarkers, this.settings, this.plugin.iconCache);
-        this.updateMapMarkers(newMarkers);
+        let edges = await this.buildEdges(this.edgeConfigFile);
+        this.updateMapMarkers(newMarkers, edges);
     }
 
     addSearchResultMarker(details: GeoSearchResult, keepZoom: boolean) {

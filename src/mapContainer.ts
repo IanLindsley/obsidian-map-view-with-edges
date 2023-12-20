@@ -86,12 +86,16 @@ type MarkerWithDegree = {
     degree: number;
 };
 
+type FileWithMarkers = {
+    file: TFile;
+    markers: FileMarker[];
+};
+
 export class MapContainer {
     private app: App;
     public settings: PluginSettings;
     public viewSettings: ViewSettings;
     private parentEl: HTMLElement;
-    private edgeConfigFile: TFile;
     /** The displayed controls and objects of the map, separated from its logical state.
      * Must only be updated in updateMarkersToState */
     public state: MapState;
@@ -172,11 +176,6 @@ export class MapContainer {
         // Create the default state by the configuration
         this.defaultState = this.settings.defaultState;
         this.parentEl = parentEl;
-
-        let files = this.app.vault.getMarkdownFiles();
-        this.edgeConfigFile = files.find(
-            (f) => f.basename?.toLowerCase() === 'edge_config'
-        );
 
         // Listen to file changes so we can update markers accordingly
         this.app.vault.on('delete', (file) =>
@@ -593,8 +592,7 @@ export class MapContainer {
         finalizeMarkers(newMarkers, this.settings, this.plugin.iconCache);
         this.state = structuredClone(state);
 
-        let edges = await this.buildEdges(this.edgeConfigFile);
-        this.updateMapMarkers(newMarkers, edges);
+        this.updateMapMarkers(newMarkers);
         // There are multiple layers of safeguards here, in an attempt to minimize the cases where a series
         // of interactions and async updates compete over the map.
         // See the comment in internalSetViewState to get more context
@@ -620,31 +618,6 @@ export class MapContainer {
         if (this.settings.debug) console.timeEnd('updateMarkersToState');
     }
 
-    async buildEdges(edgeConfigFile: TFile): Promise<Map<string, Edge>> {
-        let edges: Map<string, Edge> = new Map();
-        if (edgeConfigFile) {
-            const content = await this.app.vault.read(edgeConfigFile);
-            const edgesRegex = regex.EDGES;
-            for (const m of content.matchAll(edgesRegex)) {
-                let edge: Edge = {
-                    v1: new leaflet.LatLng(
-                        parseFloat(m.groups.lat1),
-                        parseFloat(m.groups.lng1)
-                    ),
-                    v2: new leaflet.LatLng(
-                        parseFloat(m.groups.lat2),
-                        parseFloat(m.groups.lng2)
-                    ),
-                };
-                edges.set(
-                    `${edge.v1.toString()}<<->>${edge.v2.toString()}`,
-                    edge
-                );
-            }
-        }
-        return edges;
-    }
-
     filterMarkers(allMarkers: BaseGeoLayer[], queryString: string) {
         let results: BaseGeoLayer[] = [];
         const query = new Query(this.app, queryString);
@@ -658,7 +631,7 @@ export class MapContainer {
      * Unchanged markers are not touched, new markers are created and old markers that are not in the updated list are removed.
      * @param newMarkers The new array of FileMarkers
      */
-    updateMapMarkers(newMarkers: BaseGeoLayer[], edges: Map<string, Edge>) {
+    updateMapMarkers(newMarkers: BaseGeoLayer[]) {
         let newMarkersMap: MarkersMap = new Map();
         let markersToAdd: leaflet.Layer[] = [];
         let markersToRemove: leaflet.Layer[] = [];
@@ -708,6 +681,20 @@ export class MapContainer {
         }
         this.display.polylines.length = 0;
 
+        let fileMarkerMap: Map<string, FileWithMarkers> = new Map();
+        for (let marker of this.display.markers.values()) {
+            if (marker instanceof FileMarker) {
+                let path = marker.file.path;
+                let file = marker.file;
+                if (!fileMarkerMap.has(path)) {
+                    fileMarkerMap.set(path, { file: file, markers: [] });
+                }
+                fileMarkerMap.get(path).markers.push(marker);
+            }
+        }
+
+        let edges = this.generateEdgesFromFilesWithMarkers(fileMarkerMap);
+
         // remove all edges which have lost one or more vertices
         // but if the edge is still valid, increment the degree of its vertices
         for (let [k, edge] of edges) {
@@ -721,11 +708,14 @@ export class MapContainer {
             }
         }
 
-        // update vertices sizes based on degree
+        let degrees = [...vertices.values()]
+            .map((v) => v.degree)
+            .sort((a, b) => a - b);
+        // update vertices sizes based on degree percentile
         for (let v of vertices.values()) {
             if (v.marker.hasProgrammaticMarker() && v.marker.geoLayer) {
                 v.marker.geoLayer.setIcon(
-                    this.generateProgrammaticMarker(v.degree)
+                    this.generateProgrammaticMarker(v.degree, degrees)
                 );
             }
         }
@@ -742,28 +732,94 @@ export class MapContainer {
         }
     }
 
-    private generateProgrammaticMarker(degree: number = 0): leaflet.Icon {
+    private generateEdgesFromFilesWithMarkers(
+        fileMarkerMap: Map<string, FileWithMarkers>
+    ): Map<string, Edge> {
+        let nodesSeen: Set<string> = new Set();
+        let edges: Map<string, Edge> = new Map();
+        for (let [k, fwm] of fileMarkerMap) {
+            this.generateEdgesFromFileWithMarkers(
+                fwm,
+                fileMarkerMap,
+                edges,
+                nodesSeen
+            );
+        }
+        return edges;
+    }
+
+    private generateEdgesFromFileWithMarkers(
+        source: FileWithMarkers,
+        fileMarkerMap: Map<string, FileWithMarkers>,
+        edges: Map<string, Edge>,
+        nodesSeen: Set<string>
+    ) {
+        const file = source.file;
+        const path = file.path;
+        if (nodesSeen.has(path)) {
+            return;
+        }
+        nodesSeen.add(path);
+        const fileCache = this.app.metadataCache.getFileCache(file);
+        for (let link of fileCache?.links || []) {
+            let destination = this.app.metadataCache.getFirstLinkpathDest(
+                link.link,
+                path
+            );
+            if (
+                destination &&
+                destination.path &&
+                fileMarkerMap.has(destination.path)
+            ) {
+                // both the source file and the destination file have markers;
+                // let's connect them and create edges
+                let destinationFileWithMarkers = fileMarkerMap.get(
+                    destination.path
+                );
+                for (let sourceMarker of source.markers) {
+                    for (let destinationMarker of destinationFileWithMarkers.markers) {
+                        let edge: Edge = {
+                            v1: new leaflet.LatLng(
+                                sourceMarker.location.lat,
+                                sourceMarker.location.lng
+                            ),
+                            v2: new leaflet.LatLng(
+                                destinationMarker.location.lat,
+                                destinationMarker.location.lng
+                            ),
+                        };
+                        edges.set(
+                            `${edge.v1.toString()}<<->>${edge.v2.toString()}`,
+                            edge
+                        );
+                    }
+                }
+                // continue to traverse files and links recursively
+                this.generateEdgesFromFileWithMarkers(
+                    destinationFileWithMarkers,
+                    fileMarkerMap,
+                    edges,
+                    nodesSeen
+                );
+            }
+        }
+    }
+
+    private generateProgrammaticMarker(
+        degree: number = 0,
+        degrees: number[] = []
+    ): leaflet.Icon {
         let size = 16;
         let anchor = 8;
-
-        // replace with a better algorithm later...
-        if (degree >= 2 && degree < 4) {
-            size = 20;
-            anchor = 10;
-        } else if (degree >= 4 && degree < 6) {
-            size = 24;
-            anchor = 12;
-        } else if (degree >= 6 && degree < 8) {
-            size = 28;
-            anchor = 14;
-        } else if (degree >= 8 && degree < 10) {
-            size = 32;
-            anchor = 16;
-        } else if (degree >= 10) {
-            size = 36;
-            anchor = 18;
+        let step = degrees.length <= 5 ? 1 : Math.ceil(degrees.length / 5);
+        for (let i = step - 1; i < degrees.length; i += step) {
+            if (degree <= degrees[i]) {
+                // we found the correct bucket/percentile
+                break;
+            }
+            size += 4;
+            anchor += 2;
         }
-
         return leaflet.icon({
             iconUrl:
                 'data:image/svg+xml;base64,PCFET0NUWVBFIHN2ZyBQVUJMSUMgIi0vL1czQy8vRFREIFNWRyAxLjEvL0VOIiAiaHR0cDovL3d3dy53My5vcmcvR3JhcGhpY3MvU1ZHLzEuMS9EVEQvc3ZnMTEuZHRkIj4KDTwhLS0gVXBsb2FkZWQgdG86IFNWRyBSZXBvLCB3d3cuc3ZncmVwby5jb20sIFRyYW5zZm9ybWVkIGJ5OiBTVkcgUmVwbyBNaXhlciBUb29scyAtLT4KPHN2ZyB3aWR0aD0iODAwcHgiIGhlaWdodD0iODAwcHgiIHZpZXdCb3g9IjAgMCAxNiAxNiIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiBmaWxsPSIjMEU0RTlDIiBjbGFzcz0iYmkgYmktY2lyY2xlLWZpbGwiPgoNPGcgaWQ9IlNWR1JlcG9fYmdDYXJyaWVyIiBzdHJva2Utd2lkdGg9IjAiLz4KDTxnIGlkPSJTVkdSZXBvX3RyYWNlckNhcnJpZXIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPgoNPGcgaWQ9IlNWR1JlcG9faWNvbkNhcnJpZXIiPiA8Y2lyY2xlIGN4PSI4IiBjeT0iOCIgcj0iOCIvPiA8L2c+Cg08L3N2Zz4=',
@@ -1079,8 +1135,7 @@ export class MapContainer {
                 this.app
             );
         finalizeMarkers(newMarkers, this.settings, this.plugin.iconCache);
-        let edges = await this.buildEdges(this.edgeConfigFile);
-        this.updateMapMarkers(newMarkers, edges);
+        this.updateMapMarkers(newMarkers);
     }
 
     addSearchResultMarker(details: GeoSearchResult, keepZoom: boolean) {

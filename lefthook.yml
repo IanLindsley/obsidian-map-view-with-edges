@@ -4,4 +4,4 @@ pre-commit:
         prettier:
             run: npm run prettier
         # toc:
-            # run: tools/gh-md-toc --insert README.md
+        # run: tools/gh-md-toc --insert README.md

@@ -75,6 +75,10 @@ export class FileMarker extends BaseGeoLayer {
         this.generateId();
     }
 
+    get isFrontmatterMarker(): boolean {
+        return !this.fileLine;
+    }
+
     isSame(other: BaseGeoLayer): boolean {
         return (
             other instanceof FileMarker &&

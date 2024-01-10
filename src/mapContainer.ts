@@ -110,7 +110,7 @@ class Vertex {
                 } else {
                     return { done: true };
                 }
-            }
+            },
         };
     }
 
@@ -742,7 +742,10 @@ export class MapContainer {
         // but if the edge is still valid, add it to each of its vertices.
         for (let [k, edge] of edges) {
             let [v1, v2] = k.split('<<->>');
-            if (this.display.vertices.has(v1) && this.display.vertices.has(v2)) {
+            if (
+                this.display.vertices.has(v1) &&
+                this.display.vertices.has(v2)
+            ) {
                 this.display.vertices.get(v1).addEdge(edge);
                 this.display.vertices.get(v2).addEdge(edge);
             } else {
@@ -751,7 +754,9 @@ export class MapContainer {
             }
         }
 
-        let degrees = [...this.display.vertices.values()].map((v) => v.degree).sort((a, b) => a - b);
+        let degrees = [...this.display.vertices.values()]
+            .map((v) => v.degree)
+            .sort((a, b) => a - b);
         // update vertices sizes based on degree percentile
         for (let v of this.display.vertices.values()) {
             if (v.marker.hasProgrammaticMarker() && v.marker.geoLayer) {
@@ -789,7 +794,12 @@ export class MapContainer {
         let nodesSeen: Set<string> = new Set();
         let edges: Map<string, Edge> = new Map();
         for (let [k, fwm] of fileMarkerMap) {
-            this.generateEdgesFromFileWithMarkers(fwm, fileMarkerMap, edges, nodesSeen);
+            this.generateEdgesFromFileWithMarkers(
+                fwm,
+                fileMarkerMap,
+                edges,
+                nodesSeen
+            );
         }
         return edges;
     }
@@ -808,12 +818,16 @@ export class MapContainer {
         nodesSeen.add(path);
         const fileCache = this.app.metadataCache.getFileCache(file);
         for (let link of fileCache?.links || []) {
-            let destination = this.app.metadataCache.getFirstLinkpathDest(link.link, path);
-            if (destination?.path && fileMarkerMap.has(destination.path)
-            ) {
+            let destination = this.app.metadataCache.getFirstLinkpathDest(
+                link.link,
+                path
+            );
+            if (destination?.path && fileMarkerMap.has(destination.path)) {
                 // both the source file and the destination file have markers;
                 // let's connect them and create edges
-                let destinationFileWithMarkers = fileMarkerMap.get(destination.path);
+                let destinationFileWithMarkers = fileMarkerMap.get(
+                    destination.path
+                );
                 for (let sourceMarker of source.markers) {
                     for (let destinationMarker of destinationFileWithMarkers.markers) {
                         let edge: Edge = {
@@ -826,11 +840,19 @@ export class MapContainer {
                                 destinationMarker.location.lng
                             ),
                         };
-                        edges.set(`${edge.v1.toString()}<<->>${edge.v2.toString()}`, edge);
+                        edges.set(
+                            `${edge.v1.toString()}<<->>${edge.v2.toString()}`,
+                            edge
+                        );
                     }
                 }
                 // continue to traverse files and links recursively
-                this.generateEdgesFromFileWithMarkers(destinationFileWithMarkers, fileMarkerMap, edges, nodesSeen);
+                this.generateEdgesFromFileWithMarkers(
+                    destinationFileWithMarkers,
+                    fileMarkerMap,
+                    edges,
+                    nodesSeen
+                );
             }
         }
     }
@@ -870,7 +892,11 @@ export class MapContainer {
             icon = new leaflet.Icon.Default();
         }
 
-        let newMarker = leaflet.marker(marker.location, { icon: icon, draggable: true, autoPan: true });
+        let newMarker = leaflet.marker(marker.location, {
+            icon: icon,
+            draggable: true,
+            autoPan: true,
+        });
         newMarker.on('click', (event: leaflet.LeafletMouseEvent) => {
             if (utils.isMobile(this.app))
                 this.showMarkerPopups(marker, newMarker);
@@ -916,7 +942,8 @@ export class MapContainer {
         newMarker.on('move', (event: leaflet.LeafletEvent) => {
             let oldMarkerLocation = marker.location.toString();
             if (this.display.vertices.has(oldMarkerLocation)) {
-                let vertexToUpdate = this.display.vertices.get(oldMarkerLocation);
+                let vertexToUpdate =
+                    this.display.vertices.get(oldMarkerLocation);
                 for (let edge of vertexToUpdate) {
                     if (edge.polyline) {
                         if (edge.v1.toString() === oldMarkerLocation) {
@@ -925,7 +952,9 @@ export class MapContainer {
                             edge.v2 = newMarker.getLatLng().clone();
                         }
                         edge.polyline.remove();
-                        this.display.polylines = this.display.polylines.filter(x => x !== edge.polyline);
+                        this.display.polylines = this.display.polylines.filter(
+                            (x) => x !== edge.polyline
+                        );
                         let polyline = leaflet.polyline([edge.v1, edge.v2], {
                             color: 'red',
                             weight: 1,
@@ -937,18 +966,28 @@ export class MapContainer {
                 }
                 marker.location = newMarker.getLatLng().clone();
                 this.display.vertices.delete(oldMarkerLocation);
-                this.display.vertices.set(marker.location.toString(), vertexToUpdate);
+                this.display.vertices.set(
+                    marker.location.toString(),
+                    vertexToUpdate
+                );
             }
         });
         newMarker.on('moveend', async (event: leaflet.LeafletEvent) => {
             const content = await this.app.vault.read(marker.file);
             if (marker.isFrontmatterMarker) {
                 let parsed = frontMatter<FrontMatterAttributes>(content);
-                parsed.attributes.location = [marker.location.lat, marker.location.lng];
-                let updatedContent = `---\n${yaml.dump(parsed.attributes)}---\n${parsed.body}`;
+                parsed.attributes.location = [
+                    marker.location.lat,
+                    marker.location.lng,
+                ];
+                let updatedContent = `---\n${yaml.dump(
+                    parsed.attributes
+                )}---\n${parsed.body}`;
                 await this.app.vault.modify(marker.file, updatedContent);
             } else {
-                console.log("drag of non frontmatter marker complete. updates to these marker types are currently not supported.");
+                console.log(
+                    'drag of non frontmatter marker complete. updates to these marker types are currently not supported.'
+                );
             }
         });
         return newMarker;

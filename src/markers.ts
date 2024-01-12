@@ -24,6 +24,8 @@ export abstract class BaseGeoLayer {
     public geoLayer?: leaflet.Layer;
     /** In case of an inline location, the line within the file where the geolocation was found */
     public fileLine?: number;
+    /** In case of an inline location, geolocation match */
+    public geolocationMatch?: RegExpMatchArray;
     /** Optional extra name that can be set for geolocation links (this is the link name rather than the file name) */
     public extraName?: string;
     /** Tags that this marker includes */
@@ -297,6 +299,7 @@ export async function getMarkersFromFileContent(
             }
             marker.tags = marker.tags.concat(fileTags);
             marker.fileLocation = match.index;
+            marker.geolocationMatch = match;
             marker.fileLine =
                 content.substring(0, marker.fileLocation).split('\n').length -
                 1;

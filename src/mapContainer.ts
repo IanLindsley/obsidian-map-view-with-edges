@@ -474,7 +474,6 @@ export class MapContainer {
 
     async createMap() {
         // Obsidian Leaflet compatability: disable tree-shaking for the full-screen module
-        var dummy = leafletFullscreen;
         this.display.map = new leaflet.Map(this.display.mapDiv, {
             center: this.defaultState.mapCenter,
             zoom: this.defaultState.mapZoom,
@@ -679,7 +678,6 @@ export class MapContainer {
      * @param newMarkers The new array of FileMarkers
      */
     updateMapMarkers(newMarkers: BaseGeoLayer[]) {
-        console.log('inside updateMapMarkers...');
         let newMarkersMap: MarkersMap = new Map();
         let markersToAdd: leaflet.Layer[] = [];
         let markersToRemove: leaflet.Layer[] = [];
@@ -710,7 +708,6 @@ export class MapContainer {
         for (let [key, value] of this.display.markers) {
             markersToRemove.push(value.geoLayer);
         }
-        console.log('removing layers...');
         this.display.clusterGroup.removeLayers(markersToRemove);
         this.display.clusterGroup.addLayers(markersToAdd);
         this.display.markers = newMarkersMap;
@@ -766,8 +763,6 @@ export class MapContainer {
             }
         }
 
-        // now that all orphaned edges have been culled, add
-        // polylines to the map, being careful not to add dups
         for (let edge of edges.values()) {
             let polyline = leaflet.polyline([edge.v1, edge.v2], {
                 color: 'red',
@@ -783,7 +778,6 @@ export class MapContainer {
         // clear previous polylines from the map
         for (const p of this.display.polylines) {
             p.remove();
-            console.log('removing polyline...');
         }
         this.display.polylines.length = 0;
     }
@@ -880,29 +874,29 @@ export class MapContainer {
         });
     }
 
-    private newLeafletMarker(marker: FileMarker): leaflet.Marker {
+    private newLeafletMarker(fileMarker: FileMarker): leaflet.Marker {
         let icon:
             | leaflet.Icon<leaflet.ExtraMarkers.IconOptions>
             | leaflet.DivIcon;
-        if (marker.hasProgrammaticMarker()) {
+        if (fileMarker.hasProgrammaticMarker()) {
             icon = this.generateProgrammaticMarker();
-        } else if (marker.icon) {
-            icon = marker.icon;
+        } else if (fileMarker.icon) {
+            icon = fileMarker.icon;
         } else {
             icon = new leaflet.Icon.Default();
         }
 
-        let newMarker = leaflet.marker(marker.location, {
+        let leafletMarker = leaflet.marker(fileMarker.location, {
             icon: icon,
             draggable: true,
             autoPan: true,
         });
-        newMarker.on('click', (event: leaflet.LeafletMouseEvent) => {
+        leafletMarker.on('click', (event: leaflet.LeafletMouseEvent) => {
             if (utils.isMobile(this.app))
-                this.showMarkerPopups(marker, newMarker);
+                this.showMarkerPopups(fileMarker, leafletMarker);
             else
                 this.goToMarker(
-                    marker,
+                    fileMarker,
                     utils.mouseEventToOpenMode(
                         this.settings,
                         event.originalEvent,
@@ -911,11 +905,11 @@ export class MapContainer {
                     true
                 );
         });
-        newMarker.on('mousedown', (event: leaflet.LeafletMouseEvent) => {
+        leafletMarker.on('mousedown', (event: leaflet.LeafletMouseEvent) => {
             // Middle click is supported only on mousedown and not on click, so we're checking for it here
             if (event.originalEvent.button === 1)
                 this.goToMarker(
-                    marker,
+                    fileMarker,
                     utils.mouseEventToOpenMode(
                         this.settings,
                         event.originalEvent,
@@ -924,32 +918,33 @@ export class MapContainer {
                     true
                 );
         });
-        newMarker.on('mouseover', (event: leaflet.LeafletMouseEvent) => {
+        leafletMarker.on('mouseover', (event: leaflet.LeafletMouseEvent) => {
             if (!utils.isMobile(this.app))
-                this.showMarkerPopups(marker, newMarker);
+                this.showMarkerPopups(fileMarker, leafletMarker);
         });
-        newMarker.on('mouseout', (event: leaflet.LeafletMouseEvent) => {
-            if (!utils.isMobile(this.app)) newMarker.closePopup();
+        leafletMarker.on('mouseout', (event: leaflet.LeafletMouseEvent) => {
+            if (!utils.isMobile(this.app)) leafletMarker.closePopup();
         });
-        newMarker.on('add', (event: leaflet.LeafletEvent) => {
-            newMarker
+        leafletMarker.on('add', (event: leaflet.LeafletEvent) => {
+            leafletMarker
                 .getElement()
                 .addEventListener('contextmenu', (ev: MouseEvent) => {
-                    this.openMarkerContextMenu(marker, newMarker, ev);
+                    this.openMarkerContextMenu(fileMarker, leafletMarker, ev);
                     ev.stopPropagation();
                 });
         });
-        newMarker.on('move', (event: leaflet.LeafletEvent) => {
-            let oldMarkerLocation = marker.location.toString();
-            if (this.display.vertices.has(oldMarkerLocation)) {
-                let vertexToUpdate =
-                    this.display.vertices.get(oldMarkerLocation);
+        leafletMarker.on('move', (event: leaflet.LeafletEvent) => {
+            let oldMarkerLocation = fileMarker.location.toString();
+            let vertices = this.display.vertices;
+            if (vertices.has(oldMarkerLocation)) {
+                let vertexToUpdate = vertices.get(oldMarkerLocation);
+                let newLatLng = leafletMarker.getLatLng().clone();
                 for (let edge of vertexToUpdate) {
                     if (edge.polyline) {
                         if (edge.v1.toString() === oldMarkerLocation) {
-                            edge.v1 = newMarker.getLatLng().clone();
+                            edge.v1 = newLatLng;
                         } else if (edge.v2.toString() === oldMarkerLocation) {
-                            edge.v2 = newMarker.getLatLng().clone();
+                            edge.v2 = newLatLng;
                         }
                         edge.polyline.remove();
                         this.display.polylines = this.display.polylines.filter(
@@ -964,33 +959,40 @@ export class MapContainer {
                         this.display.polylines.push(polyline);
                     }
                 }
-                marker.location = newMarker.getLatLng().clone();
-                this.display.vertices.delete(oldMarkerLocation);
-                this.display.vertices.set(
-                    marker.location.toString(),
+                fileMarker.location = newLatLng;
+                vertices.delete(oldMarkerLocation);
+                vertices.set(
+                    fileMarker.location.toString(),
                     vertexToUpdate
                 );
             }
         });
-        newMarker.on('moveend', async (event: leaflet.LeafletEvent) => {
-            const content = await this.app.vault.read(marker.file);
-            if (marker.isFrontmatterMarker) {
+        leafletMarker.on('moveend', async (event: leaflet.LeafletEvent) => {
+            const content = await this.app.vault.read(fileMarker.file);
+            let newLat = fileMarker.location.lat;
+            let newLng = fileMarker.location.lng;
+            if (fileMarker.isFrontmatterMarker) {
                 let parsed = frontMatter<FrontMatterAttributes>(content);
-                parsed.attributes.location = [
-                    marker.location.lat,
-                    marker.location.lng,
-                ];
+                parsed.attributes.location = [newLat, newLng];
                 let updatedContent = `---\n${yaml.dump(
                     parsed.attributes
                 )}---\n${parsed.body}`;
-                await this.app.vault.modify(marker.file, updatedContent);
-            } else {
-                console.log(
-                    'drag of non frontmatter marker complete. updates to these marker types are currently not supported.'
-                );
+                await this.app.vault.modify(fileMarker.file, updatedContent);
+            } else if (fileMarker.geolocationMatch?.groups) {
+                let groups = fileMarker.geolocationMatch?.groups;
+                let newGeoLocationText = '';
+                if (groups.name) {
+                    newGeoLocationText = `[${groups.name}](geo:${newLat},${newLng})`;
+                } else {
+                    newGeoLocationText = `\`location: [${newLat},${newLng}]`;
+                }
+                let oldGeolocationText = fileMarker.geolocationMatch[0];
+                let before = content.slice(0, fileMarker.fileLocation);
+                let after = content.slice(fileMarker.fileLocation + oldGeolocationText.length);
+                await this.app.vault.modify(fileMarker.file, `${before}${newGeoLocationText}${after}`);
             }
         });
-        return newMarker;
+        return leafletMarker;
     }
 
     private openMarkerContextMenu(

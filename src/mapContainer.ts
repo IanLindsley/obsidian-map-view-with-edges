@@ -961,10 +961,7 @@ export class MapContainer {
                 }
                 fileMarker.location = newLatLng;
                 vertices.delete(oldMarkerLocation);
-                vertices.set(
-                    fileMarker.location.toString(),
-                    vertexToUpdate
-                );
+                vertices.set(fileMarker.location.toString(), vertexToUpdate);
             }
         });
         leafletMarker.on('moveend', async (event: leaflet.LeafletEvent) => {
@@ -988,8 +985,13 @@ export class MapContainer {
                 }
                 let oldGeolocationText = fileMarker.geolocationMatch[0];
                 let before = content.slice(0, fileMarker.fileLocation);
-                let after = content.slice(fileMarker.fileLocation + oldGeolocationText.length);
-                await this.app.vault.modify(fileMarker.file, `${before}${newGeoLocationText}${after}`);
+                let after = content.slice(
+                    fileMarker.fileLocation + oldGeolocationText.length
+                );
+                await this.app.vault.modify(
+                    fileMarker.file,
+                    `${before}${newGeoLocationText}${after}`
+                );
             }
         });
         return leafletMarker;

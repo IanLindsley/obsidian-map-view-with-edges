@@ -1056,9 +1056,8 @@ export class SettingsTab extends PluginSettingTab {
                     if (iconElement) setting.controlEl.removeChild(iconElement);
                     let options = Object.assign(
                         {},
-                        rules.find(
-                            (element) => element.ruleName === 'default'
-                        ).iconDetails,
+                        rules.find((element) => element.ruleName === 'default')
+                            .iconDetails,
                         rule.iconDetails
                     );
                     const compiledIcon = getIconFromOptions(
@@ -1085,19 +1084,23 @@ export class SettingsTab extends PluginSettingTab {
             }
 
             new Setting(containerEl)
-            .setName('Enable Resizing of Circle Markers')
-            .setDesc(
-                'Size/resize resizable circle markers based on the degree (number of edges) connected to the node.'
-            )
-            .addToggle((component) => {
-                component
-                    .setValue(this.plugin.settings.resizeResizableCircleMarkersBasedOnDegree ??
-                        DEFAULT_SETTINGS.resizeResizableCircleMarkersBasedOnDegree)
-                    .onChange(async (value) => {
-                        this.plugin.settings.resizeResizableCircleMarkersBasedOnDegree = value;
-                        await this.plugin.saveSettings();
-                    });
-            });
+                .setName('Enable Resizing of Circle Markers')
+                .setDesc(
+                    'Size/resize resizable circle markers based on the degree (number of edges) connected to the node.'
+                )
+                .addToggle((component) => {
+                    component
+                        .setValue(
+                            this.plugin.settings
+                                .resizeResizableCircleMarkersBasedOnDegree ??
+                                DEFAULT_SETTINGS.resizeResizableCircleMarkersBasedOnDegree
+                        )
+                        .onChange(async (value) => {
+                            this.plugin.settings.resizeResizableCircleMarkersBasedOnDegree =
+                                value;
+                            await this.plugin.saveSettings();
+                        });
+                });
 
             let multiTagIconElement: HTMLElement = null;
             let testTagsBox: TextComponent = null;

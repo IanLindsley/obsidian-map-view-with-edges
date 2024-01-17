@@ -38,7 +38,11 @@ import {
     buildAndAppendFileMarkers,
     finalizeMarkers,
 } from 'src/markers';
-import { getIconFromOptions, createCircleMarker, createCircleMarkerBasedOnDegree } from 'src/markerIcons';
+import {
+    getIconFromOptions,
+    createCircleMarker,
+    createCircleMarkerBasedOnDegree,
+} from 'src/markerIcons';
 import MapViewPlugin from 'src/main';
 import * as utils from 'src/utils';
 import {
@@ -752,8 +756,8 @@ export class MapContainer {
         }
 
         let degrees = [...this.display.vertices.values()]
-        .map((v) => v.degree)
-        .sort((a, b) => a - b);
+            .map((v) => v.degree)
+            .sort((a, b) => a - b);
         // update vertices sizes based on degree percentile
         for (let v of this.display.vertices.values()) {
             let m = v.marker;
@@ -762,13 +766,13 @@ export class MapContainer {
                 let newIcon: leaflet.DivIcon;
                 if (this.settings.resizeResizableCircleMarkersBasedOnDegree) {
                     newIcon = createCircleMarkerBasedOnDegree(
-                            m.icon?.options?.iconColor,
-                            m.icon?.options?.icon,
-                            m.icon?.options?.prefix,
-                            oldIcon?.options?.html,
-                            v.degree, 
-                            degrees
-                            );
+                        m.icon?.options?.iconColor,
+                        m.icon?.options?.icon,
+                        m.icon?.options?.prefix,
+                        oldIcon?.options?.html,
+                        v.degree,
+                        degrees
+                    );
                 } else {
                     newIcon = createCircleMarker(
                         m.icon?.options?.iconColor,
@@ -780,7 +784,7 @@ export class MapContainer {
                 m.geoLayer.setIcon(newIcon);
             }
         }
-        
+
         for (let edge of edges.values()) {
             let polyline = leaflet.polyline([edge.v1, edge.v2], {
                 color: 'red',

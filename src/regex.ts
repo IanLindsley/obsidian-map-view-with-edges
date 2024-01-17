@@ -7,7 +7,8 @@ export const TAG_NAME_WITH_HEADER_AND_WILDCARD =
     /tag:(#?[\p{L}\p{N}_\/\-\*]*)/gu;
 // Note no '#' sign
 export const INLINE_TAG_IN_NOTE = /tag:(?<tag>[\p{L}\p{N}_\/\-]+)/gu;
-export const DIV_MARKER_BACKGROUND_COLOR = /background-color:\s*(?<backgroundColor>.+);/;
+export const DIV_MARKER_BACKGROUND_COLOR =
+    /background-color:\s*(?<backgroundColor>.+);/;
 export const PATH = "['p{L}p{N}_,&()/-\\.]+?";
 // path:"..."
 export const PATH_QUERY_WITH_HEADER =

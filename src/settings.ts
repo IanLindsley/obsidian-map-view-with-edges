@@ -73,6 +73,7 @@ export type PluginSettings = {
     showGeolinkPreview?: boolean;
     zoomOnGeolinkPreview?: number;
     routingUrl?: string;
+    edgeColor?: string;
 };
 
 export type MapLightDark = 'auto' | 'light' | 'dark';
@@ -231,6 +232,7 @@ export const DEFAULT_SETTINGS: PluginSettings = {
     zoomOnGeolinkPreview: 10,
     routingUrl:
         'https://www.google.com/maps/dir/?api=1&origin={x0},{y0}&destination={x1},{y1}',
+    edgeColor: 'red',
 };
 
 export function convertLegacyMarkerIcons(settings: PluginSettings): boolean {

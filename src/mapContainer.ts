@@ -787,7 +787,7 @@ export class MapContainer {
 
         for (let edge of edges.values()) {
             let polyline = leaflet.polyline([edge.v1, edge.v2], {
-                color: 'red',
+                color: this.settings.edgeColor,
                 weight: 1,
             });
             edge.polyline = polyline;
@@ -948,7 +948,7 @@ export class MapContainer {
                             (x) => x !== edge.polyline
                         );
                         let polyline = leaflet.polyline([edge.v1, edge.v2], {
-                            color: 'red',
+                            color: this.settings.edgeColor,
                             weight: 1,
                         });
                         edge.polyline = polyline;

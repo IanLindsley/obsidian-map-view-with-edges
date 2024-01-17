@@ -1102,6 +1102,23 @@ export class SettingsTab extends PluginSettingTab {
                         });
                 });
 
+            new Setting(containerEl)
+            .setName('Edge Color')
+            .setDesc(
+                'The color of the edges between nodes. The default color is red.'
+            )
+            .addText((component) => {
+                component
+                    .setValue(
+                        this.plugin.settings.edgeColor ??
+                            DEFAULT_SETTINGS.edgeColor
+                    )
+                    .onChange(async (value) => {
+                        this.plugin.settings.edgeColor = value;
+                        await this.plugin.saveSettings();
+                    });
+            });
+
             let multiTagIconElement: HTMLElement = null;
             let testTagsBox: TextComponent = null;
             const ruleTestSetting = new Setting(containerEl)

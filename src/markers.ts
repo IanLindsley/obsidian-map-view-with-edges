@@ -116,10 +116,8 @@ export class FileMarker extends BaseGeoLayer {
         return [this.location];
     }
 
-    hasProgrammaticMarker(): boolean {
-        return this.tags?.some(
-            (t) => t.toLowerCase() === '#programmatic-markers'
-        );
+    hasResizableIcon(): boolean {
+        return this.icon instanceof leaflet.DivIcon;
     }
 }
 

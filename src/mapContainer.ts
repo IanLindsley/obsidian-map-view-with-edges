@@ -38,7 +38,7 @@ import {
     buildAndAppendFileMarkers,
     finalizeMarkers,
 } from 'src/markers';
-import { getIconFromOptions } from 'src/markerIcons';
+import { getIconFromOptions, createCircleMarker, createCircleMarkerBasedOnDegree } from 'src/markerIcons';
 import MapViewPlugin from 'src/main';
 import * as utils from 'src/utils';
 import {
@@ -752,17 +752,35 @@ export class MapContainer {
         }
 
         let degrees = [...this.display.vertices.values()]
-            .map((v) => v.degree)
-            .sort((a, b) => a - b);
+        .map((v) => v.degree)
+        .sort((a, b) => a - b);
         // update vertices sizes based on degree percentile
         for (let v of this.display.vertices.values()) {
-            if (v.marker.hasProgrammaticMarker() && v.marker.geoLayer) {
-                v.marker.geoLayer.setIcon(
-                    this.generateProgrammaticMarker(v.degree, degrees)
-                );
+            let m = v.marker;
+            if (m.geoLayer && m.hasResizableIcon()) {
+                let oldIcon: leaflet.DivIcon = m.icon;
+                let newIcon: leaflet.DivIcon;
+                if (this.settings.resizeResizableCircleMarkersBasedOnDegree) {
+                    newIcon = createCircleMarkerBasedOnDegree(
+                            m.icon?.options?.iconColor,
+                            m.icon?.options?.icon,
+                            m.icon?.options?.prefix,
+                            oldIcon?.options?.html,
+                            v.degree, 
+                            degrees
+                            );
+                } else {
+                    newIcon = createCircleMarker(
+                        m.icon?.options?.iconColor,
+                        m.icon?.options?.icon,
+                        m.icon?.options?.prefix,
+                        oldIcon?.options?.html
+                    );
+                }
+                m.geoLayer.setIcon(newIcon);
             }
         }
-
+        
         for (let edge of edges.values()) {
             let polyline = leaflet.polyline([edge.v1, edge.v2], {
                 color: 'red',
@@ -851,36 +869,11 @@ export class MapContainer {
         }
     }
 
-    private generateProgrammaticMarker(
-        degree: number = 0,
-        degrees: number[] = []
-    ): leaflet.Icon {
-        let size = 16;
-        let anchor = 8;
-        let step = degrees.length <= 5 ? 1 : Math.ceil(degrees.length / 5);
-        for (let i = step - 1; i < degrees.length; i += step) {
-            if (degree <= degrees[i]) {
-                // we found the correct bucket/percentile
-                break;
-            }
-            size += 4;
-            anchor += 2;
-        }
-        return leaflet.icon({
-            iconUrl:
-                'data:image/svg+xml;base64,PCFET0NUWVBFIHN2ZyBQVUJMSUMgIi0vL1czQy8vRFREIFNWRyAxLjEvL0VOIiAiaHR0cDovL3d3dy53My5vcmcvR3JhcGhpY3MvU1ZHLzEuMS9EVEQvc3ZnMTEuZHRkIj4KDTwhLS0gVXBsb2FkZWQgdG86IFNWRyBSZXBvLCB3d3cuc3ZncmVwby5jb20sIFRyYW5zZm9ybWVkIGJ5OiBTVkcgUmVwbyBNaXhlciBUb29scyAtLT4KPHN2ZyB3aWR0aD0iODAwcHgiIGhlaWdodD0iODAwcHgiIHZpZXdCb3g9IjAgMCAxNiAxNiIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiBmaWxsPSIjMEU0RTlDIiBjbGFzcz0iYmkgYmktY2lyY2xlLWZpbGwiPgoNPGcgaWQ9IlNWR1JlcG9fYmdDYXJyaWVyIiBzdHJva2Utd2lkdGg9IjAiLz4KDTxnIGlkPSJTVkdSZXBvX3RyYWNlckNhcnJpZXIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPgoNPGcgaWQ9IlNWR1JlcG9faWNvbkNhcnJpZXIiPiA8Y2lyY2xlIGN4PSI4IiBjeT0iOCIgcj0iOCIvPiA8L2c+Cg08L3N2Zz4=',
-            iconSize: [size, size],
-            iconAnchor: [anchor, anchor],
-        });
-    }
-
     private newLeafletMarker(fileMarker: FileMarker): leaflet.Marker {
         let icon:
             | leaflet.Icon<leaflet.ExtraMarkers.IconOptions>
             | leaflet.DivIcon;
-        if (fileMarker.hasProgrammaticMarker()) {
-            icon = this.generateProgrammaticMarker();
-        } else if (fileMarker.icon) {
+        if (fileMarker.icon) {
             icon = fileMarker.icon;
         } else {
             icon = new leaflet.Icon.Default();

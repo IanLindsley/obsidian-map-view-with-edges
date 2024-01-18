@@ -762,23 +762,18 @@ export class MapContainer {
         for (let v of this.display.vertices.values()) {
             let m = v.marker;
             if (m.geoLayer && m.hasResizableIcon()) {
-                let oldIcon: leaflet.DivIcon = m.icon;
                 let newIcon: leaflet.DivIcon;
                 if (this.settings.resizeResizableCircleMarkersBasedOnDegree) {
                     newIcon = createCircleMarkerBasedOnDegree(
-                        m.icon?.options?.iconColor,
-                        m.icon?.options?.icon,
-                        m.icon?.options?.prefix,
-                        oldIcon?.options?.html,
+                        m.backgroundColor,
+                        m.iconClasses,
                         v.degree,
                         degrees
                     );
                 } else {
                     newIcon = createCircleMarker(
-                        m.icon?.options?.iconColor,
-                        m.icon?.options?.icon,
-                        m.icon?.options?.prefix,
-                        oldIcon?.options?.html
+                        m.backgroundColor,
+                        m.iconClasses
                     );
                 }
                 m.geoLayer.setIcon(newIcon);

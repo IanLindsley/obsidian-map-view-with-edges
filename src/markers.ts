@@ -81,6 +81,17 @@ export class FileMarker extends BaseGeoLayer {
         return !this.fileLine;
     }
 
+    get backgroundColor(): string {
+        let htmlElement = this.parseHtml();
+        return htmlElement?.style?.backgroundColor;
+    }
+
+    get iconClasses(): string[] {
+        let htmlElement = this.parseHtml();
+        let firstIconElement = htmlElement?.querySelector('i');
+        return Array.from(firstIconElement?.classList || []); 
+    }
+
     isSame(other: BaseGeoLayer): boolean {
         return (
             other instanceof FileMarker &&
@@ -118,6 +129,20 @@ export class FileMarker extends BaseGeoLayer {
 
     hasResizableIcon(): boolean {
         return this.icon instanceof leaflet.DivIcon;
+    }
+
+    private parseHtml(): HTMLElement {
+        let htmlElement: HTMLElement;
+        if (this.icon instanceof leaflet.DivIcon && this.icon?.options?.html) {
+            let html = this.icon?.options?.html;
+            if (typeof html === "string") {
+                let parser = new DOMParser();
+                htmlElement = parser.parseFromString(html, 'text/html').body.firstChild as HTMLElement;
+            } else {
+                htmlElement = html;
+            }
+        }
+        return htmlElement;
     }
 }
 

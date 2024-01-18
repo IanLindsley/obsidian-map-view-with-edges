@@ -34,12 +34,8 @@ export function getIconFromOptions(
     // @ts-ignore
     const backupL = L;
     try {
-        if (shape === 'resizable-circle') {
-            return createCircleMarker(
-                iconSpec.markerColor,
-                iconSpec.icon,
-                iconSpec.prefix
-            );
+        if (shape === "resizable-circle") {
+            return createCircleMarker(iconSpec.markerColor, [iconSpec.icon, iconSpec.prefix]);
         } else {
             // @ts-ignore
             L = localL;
@@ -59,10 +55,8 @@ export function getIconFromOptions(
 }
 
 export function createCircleMarkerBasedOnDegree(
-    color: string = 'red',
-    icon: string = 'fa-person',
-    iconPrefix: string = 'fas',
-    html: string | false | HTMLElement = null,
+    color: string = "red",
+    iconClasses: string[] = ["fas", "fa-person"],
     degree: number = 0,
     degrees: number[] = []
 ): leaflet.DivIcon {
@@ -77,20 +71,17 @@ export function createCircleMarkerBasedOnDegree(
         size += 4;
         anchor += 2;
     }
-    return createCircleMarker(color, icon, iconPrefix, html, size, anchor);
+    return createCircleMarker(color, iconClasses, size, anchor);
 }
 
 export function createCircleMarker(
-    color: string = 'red',
-    icon: string = 'fa-person',
-    iconPrefix: string = 'fas',
-    html: string | false | HTMLElement = null,
+    color: string = "red",
+    iconClasses: string[] = ["fas", "fa-person"],
     iconSize: number = 30,
     iconAnchor: number = 15
 ): leaflet.DivIcon {
-    if (!html) {
-        let circleStyle = `
-        background-color: ${color ?? 'red'};
+    let circleStyle = `
+        background-color: ${color ?? "red"};
         border: none;
         border-radius: 50%;
         width: ${iconSize}px;
@@ -99,17 +90,13 @@ export function createCircleMarker(
         justify-content: center;
         align-items: center;
         color: white;
-        `;
-        let fontSize = Math.ceil(iconSize * 0.66);
-        html = `<div style="${circleStyle}"><i style="font-size: ${fontSize}px;" class="${
-            iconPrefix ?? 'fas'
-        } ${icon ?? 'fa-person'}"></i></div>`;
-    }
+    `;
+    let fontSize = Math.ceil(iconSize * .66);
     let circleIcon = leaflet.divIcon({
-        className: '',
-        html: html,
+        className: '', // Disable default Leaflet icon styles
+        html: `<div style="${circleStyle}"><i style="font-size: ${fontSize}px;" class="${iconClasses.join(' ')}"></i></div>`,
         iconSize: [iconSize, iconSize],
-        iconAnchor: [iconAnchor, iconAnchor],
+        iconAnchor: [iconAnchor, iconAnchor]
     });
     return circleIcon;
 }

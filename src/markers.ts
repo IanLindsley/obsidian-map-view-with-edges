@@ -89,7 +89,7 @@ export class FileMarker extends BaseGeoLayer {
     get iconClasses(): string[] {
         let htmlElement = this.parseHtml();
         let firstIconElement = htmlElement?.querySelector('i');
-        return Array.from(firstIconElement?.classList || []); 
+        return Array.from(firstIconElement?.classList || []);
     }
 
     isSame(other: BaseGeoLayer): boolean {
@@ -135,9 +135,10 @@ export class FileMarker extends BaseGeoLayer {
         let htmlElement: HTMLElement;
         if (this.icon instanceof leaflet.DivIcon && this.icon?.options?.html) {
             let html = this.icon?.options?.html;
-            if (typeof html === "string") {
+            if (typeof html === 'string') {
                 let parser = new DOMParser();
-                htmlElement = parser.parseFromString(html, 'text/html').body.firstChild as HTMLElement;
+                htmlElement = parser.parseFromString(html, 'text/html').body
+                    .firstChild as HTMLElement;
             } else {
                 htmlElement = html;
             }
